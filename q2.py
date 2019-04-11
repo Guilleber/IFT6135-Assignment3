@@ -104,17 +104,6 @@ def recon_loss(x, x_):
     return F.binary_cross_entropy_with_logits(x_, x, reduction="none").sum(dim=-1)
 
 
-def mse(x, x_, batch_size):
-    """
-    Function that computes the Mean squared error between the input x and the generated samples x_
-    :param x: Input of size [batch_size, 28, 28]
-    :param x_: Generated samples of size [batch_size, 28, 28]
-    :param batch_size:
-    :return:
-    """
-    return (((x - x_)**2.).view([batch_size, -1])).mean(dim=1)
-
-
 def train_model(model, train, valid, save_path):
     """
     Function that trains the model
