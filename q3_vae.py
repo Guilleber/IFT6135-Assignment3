@@ -151,6 +151,8 @@ def train_model(model, train, valid, save_path):
 
     for epoch in range(20):
         for batch, i in train:
+            # put batch on device
+            batch = batch.to(args.device)
 
             # obtain the parameters from the encoder and compute KL divergence
             mu, log_sigma, g_z = model(batch)
@@ -171,11 +173,14 @@ def train_model(model, train, valid, save_path):
 
         # compute the loss for the validation set
         valid_elbo = torch.zeros(1)
+        nb_batches = 0
         for batch, i in valid:
+            nb_batches += 1
             mu, log_sigma, g_z = model(batch)
             kl = kl_div(mu, log_sigma)
             logpx_z = ll(valid.view(-1, 3*32*32), g_z.view(-1, 3*32*32))
             valid_elbo += (logpx_z - kl).mean()
+        valid_elbo /= nb_batches
         print("After epoch {} the validation loss is: ".format(epoch+1), valid_elbo.item())
 
     # save the model to be used later

@@ -208,9 +208,9 @@ def evaluate(model, x, z):
 
 if __name__ == "__main__":
     # load the dataset
-    train = torch.from_numpy(np.loadtxt("binarized_mnist_train.amat").astype(np.float32))
-    valid = torch.from_numpy(np.loadtxt("binarized_mnist_valid.amat").astype(np.float32))
-    test = torch.from_numpy(np.loadtxt("binarized_mnist_test.amat").astype(np.float32))
+    train = torch.from_numpy(np.loadtxt("binarized_mnist_train.amat").astype(np.float32)).to(args.device)
+    valid = torch.from_numpy(np.loadtxt("binarized_mnist_valid.amat").astype(np.float32)).to(args.device)
+    test = torch.from_numpy(np.loadtxt("binarized_mnist_test.amat").astype(np.float32)).to(args.device)
 
     # reshape the data for usage in the model
     train = train.view([-1, 1, 28, 28])
