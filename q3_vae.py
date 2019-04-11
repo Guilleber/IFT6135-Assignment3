@@ -140,7 +140,6 @@ def train_model(model, train, valid, save_path):
     torch.save(model.state_dict(), save_path)
 
 
-
 if __name__ == "__main__":
     # get the arguments
     args = parser.parse_args()
