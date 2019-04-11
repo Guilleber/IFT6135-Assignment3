@@ -47,17 +47,17 @@ class VAE(nn.Module):
             # Layer 1
             nn.Conv2d(3, 128, kernel_size=4, stride=2, padding=1),
             nn.BatchNorm2d(128),
-            nn.LeakyReLU(),
+            nn.LeakyReLU(2e-2),
 
             #  Layer 2
             nn.Conv2d(128, 256, kernel_size=4, stride=2, padding=1),
             nn.BatchNorm2d(256),
-            nn.LeakyReLU(),
+            nn.LeakyReLU(2e-2),
 
             # Layer 3
             nn.Conv2d(256, 512, kernel_size=4, stride=2, padding=1),
             nn.BatchNorm2d(512),
-            nn.LeakyReLU(),
+            nn.LeakyReLU(2e-2),
 
             # Layer 4
             View(self.batch_size, 4*4*512),
@@ -69,21 +69,21 @@ class VAE(nn.Module):
             nn.Linear(self.dimz, 4*4*512),
             View(self.batch_size, 512, 4, 4),
             nn.BatchNorm2d(512),
-            nn.LeakyReLU(),
+            nn.LeakyReLU(2e-2),
 
             # Layer 2
             nn.ConvTranspose2d(512, 256, kernel_size=4, stride=2, padding=1),
             nn.BatchNorm2d(256),
-            nn.LeakyReLU(),
+            nn.LeakyReLU(2e-2),
 
             # Layer 3
             nn.ConvTranspose2d(256, 128, kernel_size=4, stride=2, padding=1),
             nn.BatchNorm2d(128),
-            nn.LeakyReLU(),
+            nn.LeakyReLU(2e-2),
 
             # Layer 4
             nn.ConvTranspose2d(128, 3, kernel_size=4, stride=2, padding=1),
-            nn.LeakyReLU()
+            nn.LeakyReLU(2e-2)
         )
 
     def forward(self, x):
@@ -176,6 +176,7 @@ def train_model(model, train, valid, save_path):
         nb_batches = 0
         for batch, i in valid:
             nb_batches += 1
+            batch = batch.to(args.device)
             mu, log_sigma, g_z = model(batch)
             kl = kl_div(mu, log_sigma)
             logpx_z = ll(valid.view(-1, 3*32*32), g_z.view(-1, 3*32*32))
