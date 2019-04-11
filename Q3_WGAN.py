@@ -141,7 +141,7 @@ def train_model(g, d, train, valid, save_path):
             a = torch.rand_like(batch, device=args.device)
             conv = a * batch + (1 - a) * fake
             d_conv = d(conv)
-            grad = autograd.grad(d_conv, conv, torch.ones_like(d_conv),
+            grad = autograd.grad(d_conv, conv, torch.ones_like(d_conv).to(args.device),
                                  retain_graph=True, create_graph=True, only_inputs=True)[0]
 
             # compute the WGAN-GP loss
