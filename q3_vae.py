@@ -3,6 +3,7 @@ from torch import nn
 from torch import optim
 from torch import autograd
 from torch.nn import functional as F
+from torch import cuda
 from classify_svhn import get_data_loader
 import numpy as np
 import argparse
@@ -16,6 +17,10 @@ parser.add_argument("--load_path", type=str, default="q3_vae.pt")
 parser.add_argument("--batch_size", type=int, default=32, help="Size of the mini-batches")
 parser.add_argument("--dimz", type=int, default=100, help="Dimension of the latent variables")
 parser.add_argument("--data_path", type=str, default="svhn.mat", help="SVHN dataset location")
+
+# get the arguments
+args = parser.parse_args()
+args.device = torch.device("cuda") if cuda.is_available() else torch.device('cpu')
 
 
 class View(nn.Module):
@@ -92,7 +97,7 @@ class VAE(nn.Module):
         mu, log_sigma = enc[:, :self.dimz], enc[:, self.dimz:]
 
         # get the sample z
-        z = torch.randn_like(mu)
+        z = torch.randn_like(mu,  device=args.device)
 
         # sample from qz_x
         f_x = mu + torch.exp(log_sigma) * z
@@ -178,8 +183,9 @@ def train_model(model, train, valid, save_path):
 
 
 if __name__ == "__main__":
-    # get the arguments
-    args = parser.parse_args()
+    # check for cuda
+    device = torch.device("cuda") if cuda.is_available() else torch.device('cpu')
+    args.device = device
 
     # load the dataset
     train, valid, test = get_data_loader(args.data_path, args.batch_size)
