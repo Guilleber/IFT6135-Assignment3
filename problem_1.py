@@ -12,9 +12,9 @@ class Classifier(nn.Module):
         super(Classifier, self).__init__()
         self.input_size = input_size
         
-        self.layer1 = nn.Linear(self.input_size, 128)
-        self.layer2 = nn.Linear(128, 128)
-        self.layer3 = nn.Linear(128, 1)
+        self.layer1 = nn.Linear(self.input_size, 64)
+        self.layer2 = nn.Linear(64, 64)
+        self.layer3 = nn.Linear(64, 1)
         
     def forward(self, x):
         out = F.relu(self.layer1(x))
@@ -51,7 +51,7 @@ def train(metric, dist1, dist2, use_cuda=False):
             x_z.requires_grad = True
             y_z = D(x_z)
             grad_z = torch.autograd.grad(y_z, x_z, grad_outputs=torch.ones_like(y_z).cuda() if use_cuda else torch.ones_like(y_z), create_graph=True, retain_graph=True)[0]
-            loss = torch.mean(y_1) - torch.mean(y_2) + lambda_*torch.mean(torch.norm(grad_z - 1, p=2, dim=1))
+            loss = -(torch.mean(y_1) - torch.mean(y_2) + lambda_*torch.mean(torch.norm(grad_z - 1, p=2, dim=1)))
             
         loss.backward()
         optimizer.step()
