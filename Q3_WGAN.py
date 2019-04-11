@@ -148,7 +148,7 @@ def train_model(g, d, train, valid, save_path):
             loss = wgan_gp_loss(real_prob, fake_prob, grad.view(-1, 3*32*32), args.lam).mean()
 
             # minimize the loss
-            autograd.backward([loss])
+            autograd.backward([-loss])
 
             # Update the parameters and zero the gradients for the next mini-batch
             if turn // args.update_ratio == 0:
