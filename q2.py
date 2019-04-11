@@ -10,8 +10,8 @@ import gc
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-t", action="store_true", help="Flag to specify if we train the model")
-parser.add_argument("--save_path", type="str", default="q2.pt")
-parser.add_argument("--load_path", type="str", default="q2.pt")
+parser.add_argument("--save_path", type=str, default="q2.pt")
+parser.add_argument("--load_path", type=str, default="q2.pt")
 
 
 class VAE(nn.Module):
@@ -188,7 +188,6 @@ def log_ll(model, x, z):
         mu, log_sigma = model.params(x.view([-1, 1, 28, 28]))
         x_ = (model.generate(z.view(-1, model.dimz))).view(model.batch_size, -1, 784)
         logpx_z = torch.stack([-recon_loss(x, x_[:, i, :]) for i in range(z.size()[1])], dim=1)
-        print("Done")
     logqz_x = pdf(z, mu, log_sigma)
     logpz = pdf(z, torch.zeros_like(mu), torch.ones_like(log_sigma))
     scale = torch.max(logpx_z + logpz - logqz_x, dim=1, keepdim=True)[0]

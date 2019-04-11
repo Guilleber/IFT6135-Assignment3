@@ -10,8 +10,8 @@ import gc
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-t", action="store_true", help="Flag to specify if we train the model")
-parser.add_argument("--save_path", type="str", default="q2.pt")
-parser.add_argument("--load_path", type="str", default="q2.pt")
+parser.add_argument("--save_path", type=str, default="q2.pt")
+parser.add_argument("--load_path", type=str, default="q2.pt")
 
 
 class View(nn.module):
