@@ -16,9 +16,12 @@ parser.add_argument("--load_path", type=str, default="q2.pt")
 
 class View(nn.module):
 
-    def __init__(self, shape):
+    def __init__(self, shape, *shape_):
         super()
-        self.shape = shape
+        if isinstance(shape, list):
+            self.shape = shape
+        else:
+            self.shape = (shape,) + shape_
 
     def forward(self, x):
         return x.view(self.shape)
@@ -35,22 +38,10 @@ class VAE(nn.Module):
             nn.Linear(4*4*512)
         ])
 
-        self.dec = nn.ModuleDict({
-            "linear": nn.Linear(self.dimz, 256),
-            "conv": nn.Sequential(
-                nn.ELU(),
-                nn.Conv2d(256, 64, 5, padding=4),
-                nn.ELU(),
-                nn.UpsamplingBilinear2d(scale_factor=2),
-                nn.Conv2d(64, 32, 3, padding=2),
-                nn.ELU(),
-                nn.UpsamplingBilinear2d(scale_factor=2),
-                nn.Conv2d(32, 16, 3, padding=2),
-                nn.ELU(),
-                nn.Conv2d(16, 1, 3, padding=2)
-            )
-        }
-        )
+        self.dec = nn.Sequential([
+            nn.Linear(4*4*512),
+            View()
+        ])
 
     def forward(self, x):
         x = self.enc["conv"](x)
