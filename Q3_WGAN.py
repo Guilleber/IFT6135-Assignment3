@@ -173,7 +173,7 @@ def train_model(g, d, train, valid, save_path):
             a = torch.randn_like(batch, device=args.device)
             conv = a * batch + (1. - a) * fake
             d_conv = d(g(conv))
-            grad = autograd.grad(d_conv, conv, torch.ones_like(d_conv),
+            grad = autograd.grad(d_conv, conv, torch.ones_like(d_conv).to(args.device),
                                  retain_graph=True, create_graph=True, only_inputs=True)[0]
             batch_loss = wgan_gp_loss(real_prob, fake_prob, grad.view(-1, 3*32*32), args.lam)
             valid_loss += batch_loss
