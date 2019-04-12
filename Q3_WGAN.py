@@ -251,7 +251,6 @@ if __name__ == "__main__":
 
     # load the dataset
     train, valid, test = get_data_loader(args.data_dir, args.batch_size)
-    train, valid, test = get_data_loader(args.data_dir, args.batch_size)
 
     # Create model. Load or train depending on choice
     g = G(args.batch_size, args.dimz).to(args.device)
