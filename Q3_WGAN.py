@@ -10,6 +10,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import samplers
 import argparse
+import os
+from PIL import Image
 
 
 parser = argparse.ArgumentParser()
@@ -18,12 +20,15 @@ parser.add_argument("--save_path", type=str, default="q3_gan.pt")
 parser.add_argument("--load_path", type=str, default="q3_gan.pt")
 parser.add_argument("--batch_size", type=int, default=32, help="Size of the mini-batches")
 parser.add_argument("--dimz", type=int, default=100, help="Dimension of the latent variables")
-parser.add_argument("--data_path", type=str, default="svhn.mat", help="SVHN dataset location")
+parser.add_argument("--data_dir", type=str, default="svhn.mat", help="SVHN dataset location")
 parser.add_argument("--lam",  type=int, default=20, help="Lambda coefficient for the regularizer in"
                                                             "in the WGAN-GP loss")
 parser.add_argument("--lr", type=float, default=3e-4, help="Learning rate for the optimzer")
 parser.add_argument("--update_ratio", type=int, default=20, help="The number of updates to  the discriminator"
                                                                  "before one update to the generator")
+parser.add_argument("--eps", type=float, default=1e-1, help="Perturbation value to the latent when evaluating")
+parser.add_argument("--sample_dir", type=str, default="samples", help="Directory containing samples for"
+                                                                      "evaluation")
 
 # get the arguments
 args = parser.parse_args()
@@ -50,7 +55,7 @@ class D(nn.Module):
             nn.LeakyReLU(negative_slope=0.2),
 
             # layer 4
-            View(self.batch_size, 4*4*512),
+            View(-1, 4*4*512),
             nn.Linear(4 * 4 * 512, self.dimz),
             nn.LeakyReLU(2e-2),
 
@@ -75,7 +80,7 @@ class G(nn.Module):
             # layer 1
             nn.Linear(self.dimz, 4 * 4 * 512),
             nn.LeakyReLU(2e-2),
-            View(self.batch_size, 512, 4, 4),
+            View(-1, 512, 4, 4),
 
             # layer2
             nn.ConvTranspose2d(512, 256, 4, padding=1, stride=2),
@@ -160,27 +165,85 @@ def train_model(g, d, train, valid, save_path):
                 turn = 0
 
         # compute the loss for the validation set
-        valid_loss = torch.zeros(1)
-        nb_batches = 0
-        for i, (batch, label) in enumerate(valid):
-            nb_batches += 1
-            batch = batch.to(args.device)
-            real_prob = d(batch)
-            z = torch.randn(g.batch_size, g.dimz, device=args.device)
-            fake = g(z)
-            fake_prob = d(fake)
-            a = torch.randn_like(batch, device=args.device)
-            conv = a * batch + (1. - a) * fake
-            d_conv = d(g(conv))
-            grad = autograd.grad(d_conv, conv, torch.ones_like(d_conv).to(args.device),
-                                 retain_graph=True, create_graph=True, only_inputs=True)[0]
-            batch_loss = wgan_gp_loss(real_prob, fake_prob, grad.view(-1, 3*32*32), args.lam)
-            valid_loss += batch_loss
-        valid_loss /= nb_batches
-        print("After epoch {} the validation loss is: ".format(epoch+1), valid_loss.item())
+        with torch.no_grad():
+            valid_loss = torch.zeros(1)
+            nb_batches = 0
+            for i, (batch, label) in enumerate(valid):
+                nb_batches += 1
+                batch = batch.to(args.device)
+                real_prob = d(batch)
+                z = torch.randn(g.batch_size, g.dimz, device=args.device)
+                fake = g(z)
+                fake_prob = d(fake)
+                a = torch.randn_like(batch, device=args.device)
+                conv = a * batch + (1. - a) * fake
+                d_conv = d(g(conv))
+                grad = autograd.grad(d_conv, conv, torch.ones_like(d_conv).to(args.device),
+                                     retain_graph=True, create_graph=True, only_inputs=True)[0]
+                batch_loss = wgan_gp_loss(real_prob, fake_prob, grad.view(-1, 3*32*32), args.lam)
+                valid_loss += batch_loss
+            valid_loss /= nb_batches
+            print("After epoch {} the validation loss is: ".format(epoch+1), valid_loss.item())
 
     # save the model to be used later
-    torch.save({"generator": g.state_dict(), "discriminator": d}, save_path)
+    torch.save(g.state_dict(), save_path)
+
+
+def evaluation(model):
+    """
+    Function that generates samples for the qualitative evaluation of the model
+    :param model: The model from which we pull samples
+    :return:
+    """
+    with torch.no_grad():
+        z = torch.rand(model.batch_size, model.dimz, device=args.device)
+        samples = model.dec(z)
+
+        if not os.path.isdir(args.sample_dir):
+            os.mkdir(args.sample_dir)
+
+        decoder_dir = os.path.join(args.sample_dir, "decoder_samples")
+        if not os.path.isdir(decoder_dir):
+            os.mkdir(decoder_dir)
+
+        # save the decoder samples
+        for i, sample in enumerate(samples):
+            sample = sample.permute(1, 2, 0)
+            im = Image.fromarray(sample.to(device='cpu').numpy().astype('uint8'))
+            im.save(os.path.join(decoder_dir, "img_{}.jpeg".format(i)))
+
+        # perturb the z and get samples
+        z_ = z + args.eps
+        samples = model.dec(z_)
+
+        perturb_dir = os.path.join(args.sample_dir, "perturbed_samples")
+        if not os.path.isdir(perturb_dir):
+            os.mkdir(perturb_dir)
+
+        # save the perturbed samples
+        for i, sample in enumerate(samples):
+            sample = sample.permute(1, 2, 0)
+            im = Image.fromarray(sample.to(device='cpu').numpy().astype('uint8'))
+            im.save(os.path.join(perturb_dir, "p_img_{}.jpeg".format(i)))
+
+        int_dir = os.path.join(args.sample_dir, "interpolated_samples")
+        if not os.path.isdir(int_dir):
+            os.mkdir(int_dir)
+
+        # interpolate between two z's and generate samples. Save them
+        for a in range(11):
+            z_a = a / 10. * z[0:1] + (1. - a/10.) * z[1:2]
+            gz_a = (model.dec(z_a)[0]).permute(1, 2, 0)
+            im = Image.fromarray(gz_a.to(device='cpu').numpy().astype('uint8'))
+            im.save(os.path.join(int_dir, "i1_img_{}.jpeg".format(a)))
+
+        # interpolate the result of the two g(z) values
+        g_z = model.dec(z[0:2])
+        for a in range(11):
+            x_a = a / 10. * g_z[0] + (1. - a / 10.) * g_z[1]
+            x_a = x_a.permute(1, 2, 0)
+            im = Image.fromarray(x_a.to(device='cpu').numpy().astype('uint8'))
+            im.save(os.path.join(int_dir, "i2_img_{}.jpeg".format(a)))
 
 
 if __name__ == "__main__":
@@ -189,18 +252,16 @@ if __name__ == "__main__":
     args.device = device
 
     # load the dataset
-    train, valid, test = get_data_loader(args.data_path, args.batch_size)
+    train, valid, test = get_data_loader(args.data_dir, args.batch_size)
+    train, valid, test = get_data_loader(args.data_dir, args.batch_size)
 
     # Create model. Load or train depending on choice
-    g = G(args.batch_size, args.dimz)
-    d = D(args.batch_size, args.dimz)
+    g = G(args.batch_size, args.dimz).to(args.device)
+    d = D(args.batch_size, args.dimz).to(args.device)
     if args.t:
         train_model(g, d, train, valid, args.save_path)
     else:
-        state_dict = torch.load(args.load_path)
-        g.load_state_dict(state_dict["generator"])
+        g.load_state_dict(torch.load(args.load_path))
         g.eval()
-        d.load_state_dict(state_dict["discriminator"])
-        d.eval()
 
-    # Evaluate part
+        evaluation(g)
