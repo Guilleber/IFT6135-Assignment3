@@ -28,7 +28,7 @@ class D(nn.Module):
         
     
     def forward(self, x)
-        out = self.convs(x).view(4*4*512)
+        out = self.convs(x).view(32, 4*4*512)
         out = F.sigmoid(self.linear2(F.leaky_relu(self.linear1(out), negative_slope=0.2)))
         return out
     
@@ -53,6 +53,6 @@ class G(nn.Module):
     
     
     def forward(self, z)
-        out = F.leaky_relu(self.linear1(z), negative_slope=0.2).view(4, 4, 512)
+        out = F.leaky_relu(self.linear1(z), negative_slope=0.2).view(32, 512, 4, 4)
         out = self.deconvs(out)
         return out
