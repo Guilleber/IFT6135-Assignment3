@@ -3,6 +3,7 @@ from torch import nn
 from torch import optim
 from torch import autograd
 from torch.nn import functional as F
+from torch import cuda
 import numpy as np
 import argparse
 import gc
@@ -10,8 +11,12 @@ import gc
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-t", action="store_true", help="Flag to specify if we train the model")
-parser.add_argument("--save_path", type="str", default="q2.pt")
-parser.add_argument("--load_path", type="str", default="q2.pt")
+parser.add_argument("--save_path", type=str, default="q2.pt")
+parser.add_argument("--load_path", type=str, default="q2.pt")
+
+# get the arguments
+args = parser.parse_args()
+args.device = torch.device('cuda') if cuda.is_available() else torch.device("cpu")
 
 
 class VAE(nn.Module):
@@ -59,7 +64,7 @@ class VAE(nn.Module):
         mu, log_sigma = q_params[:, :self.dimz], q_params[:, self.dimz:]
 
         sigma = torch.exp(log_sigma) + 1e-7
-        e = torch.randn_like(mu, dtype=torch.float32)
+        e = torch.randn_like(mu, dtype=torch.float32, device=args.device)
         z = mu + sigma * e
         x_ = self.dec["linear"](z)
         x_ = self.dec["conv"](x_.view(-1, 256, 1, 1))
@@ -102,17 +107,6 @@ def recon_loss(x, x_):
     :return: The reconstruction loss for each batch item. Size is [batch_size,]
     """
     return F.binary_cross_entropy_with_logits(x_, x, reduction="none").sum(dim=-1)
-
-
-def mse(x, x_, batch_size):
-    """
-    Function that computes the Mean squared error between the input x and the generated samples x_
-    :param x: Input of size [batch_size, 28, 28]
-    :param x_: Generated samples of size [batch_size, 28, 28]
-    :param batch_size:
-    :return:
-    """
-    return (((x - x_)**2.).view([batch_size, -1])).mean(dim=1)
 
 
 def train_model(model, train, valid, save_path):
@@ -188,7 +182,6 @@ def log_ll(model, x, z):
         mu, log_sigma = model.params(x.view([-1, 1, 28, 28]))
         x_ = (model.generate(z.view(-1, model.dimz))).view(model.batch_size, -1, 784)
         logpx_z = torch.stack([-recon_loss(x, x_[:, i, :]) for i in range(z.size()[1])], dim=1)
-        print("Done")
     logqz_x = pdf(z, mu, log_sigma)
     logpz = pdf(z, torch.zeros_like(mu), torch.ones_like(log_sigma))
     scale = torch.max(logpx_z + logpz - logqz_x, dim=1, keepdim=True)[0]
@@ -214,13 +207,10 @@ def evaluate(model, x, z):
 
 
 if __name__ == "__main__":
-    # get the arguments
-    args = parser.parse_args()
-
     # load the dataset
-    train = torch.from_numpy(np.loadtxt("binarized_mnist_train.amat").astype(np.float32))
-    valid = torch.from_numpy(np.loadtxt("binarized_mnist_valid.amat").astype(np.float32))
-    test = torch.from_numpy(np.loadtxt("binarized_mnist_test.amat").astype(np.float32))
+    train = torch.from_numpy(np.loadtxt("binarized_mnist_train.amat").astype(np.float32)).to(args.device)
+    valid = torch.from_numpy(np.loadtxt("binarized_mnist_valid.amat").astype(np.float32)).to(args.device)
+    test = torch.from_numpy(np.loadtxt("binarized_mnist_test.amat").astype(np.float32)).to(args.device)
 
     # reshape the data for usage in the model
     train = train.view([-1, 1, 28, 28])
@@ -235,7 +225,7 @@ if __name__ == "__main__":
         model.load_state_dict(torch.load(args.load_path))
         model.eval()
 
-    z = torch.randn(size=[model.batch_size, 200, 100])
+    z = torch.randn(size=[model.batch_size, 200, 100], device=args.device)
     # compute the log_likelihood for the validation set and the test set
     valid_ll = evaluate(model, valid.view([-1, 784]), z).mean().item()
     gc.collect()
