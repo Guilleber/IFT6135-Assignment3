@@ -135,7 +135,7 @@ def ll(x, x_):
     :return:
     """
     k = x.size()[1]
-    return -k/2 * torch.log(2 * np.pi * torch.ones(1)) -0.5 * ((x - x_)**2.).mean(dim=1)
+    return -k/2 * torch.log(2 * np.pi * torch.ones(1, device=args.device)) -0.5 * ((x - x_)**2.).mean(dim=1)
 
 
 def train_model(model, train, valid, save_path):
@@ -197,7 +197,7 @@ if __name__ == "__main__":
     train, valid, test = get_data_loader(args.data_path, args.batch_size)
 
     # Create model. Load or train depending on choice
-    model = VAE(batch_size=args.batch_size, dimz=args.dimz)
+    model = VAE(batch_size=args.batch_size, dimz=args.dimz).to(args.device)
     if args.t:
         train_model(model, train, valid, args.save_path)
     else:
