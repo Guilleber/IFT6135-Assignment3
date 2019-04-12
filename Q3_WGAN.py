@@ -137,7 +137,7 @@ def train_model(g, d, train, valid, save_path):
             real_prob = d(batch)
 
             # obtain the discriminator output on the fake data
-            z = torch.randn(g.batch_size, g.dimz, device=args.device)
+            z = torch.randn(batch.size()[0], g.dimz, device=args.device)
             fake = g(z)
             fake_prob = d(fake)
 
@@ -172,7 +172,7 @@ def train_model(g, d, train, valid, save_path):
                 nb_batches += 1
                 batch = batch.to(args.device)
                 real_prob = d(batch)
-                z = torch.randn(g.batch_size, g.dimz, device=args.device)
+                z = torch.randn(batch.size()[0], g.dimz, device=args.device)
                 fake = g(z)
                 fake_prob = d(fake)
                 a = torch.randn_like(batch, device=args.device)
