@@ -150,7 +150,7 @@ def train_model(model, train, valid, save_path):
     adam = optim.Adam(model.parameters(), lr=3e-4)
 
     for epoch in range(20):
-        for batch, i in train:
+        for i, (batch, label) in enumerate(train):
             # put batch on device
             batch = batch.to(args.device)
 
@@ -174,7 +174,7 @@ def train_model(model, train, valid, save_path):
         # compute the loss for the validation set
         valid_elbo = torch.zeros(1)
         nb_batches = 0
-        for batch, i in valid:
+        for i, (batch, label) in enumerate(valid):
             nb_batches += 1
             batch = batch.to(args.device)
             mu, log_sigma, g_z = model(batch)
