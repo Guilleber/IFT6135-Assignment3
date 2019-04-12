@@ -65,7 +65,7 @@ class D(nn.Module):
         )
 
     def forward(self, x):
-        out = self.convs(x)
+        out = self.convs(x)[:, 0]
         return out
     
 
