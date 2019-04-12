@@ -19,7 +19,7 @@ class Classifier(nn.Module):
     def forward(self, x):
         out = F.relu(self.layer1(x))
         out = F.relu(self.layer2(out))
-        out = F.sigmoid(self.layer3(out))
+        out = self.layer3(out)
         return out
     
 def train(metric, dist1, dist2, use_cuda=False):
@@ -42,6 +42,8 @@ def train(metric, dist1, dist2, use_cuda=False):
         y_2 = D(x_2)
         
         if metric == 'JSD':
+            y_1 = F.sigmoid(y_1)
+            y_2 = F.sigmoid(y_2)
             loss = - torch.mean(torch.log(y_1)) - torch.mean(torch.log(1 - y_2))
         if metric == 'WD':
             a = torch.from_numpy(next(dist_u)).float()
@@ -50,8 +52,8 @@ def train(metric, dist1, dist2, use_cuda=False):
             x_z = a*x_1 + (1 - a)*x_2
             x_z.requires_grad = True
             y_z = D(x_z)
-            grad_z = torch.autograd.grad(y_z, x_z, grad_outputs=torch.ones_like(y_z).cuda() if use_cuda else torch.ones_like(y_z), create_graph=True, retain_graph=True)[0]
-            loss = -(torch.mean(y_1) - torch.mean(y_2) + lambda_*torch.mean(torch.norm(grad_z - 1, p=2, dim=1)))
+            grad_z = torch.autograd.grad(y_z, x_z, grad_outputs=torch.ones(y_z.size()).cuda() if use_cuda else torch.ones(y_z.size()), retain_graph=True, create_graph=True, only_inputs=True)[0]
+            loss = -(torch.mean(y_1) - torch.mean(y_2) - lambda_*torch.mean((torch.norm(grad_z, p=2, dim=1)-1)**2))
             
         loss.backward()
         optimizer.step()
@@ -68,6 +70,8 @@ def estimate(metric, dist1, dist2, D, use_cuda=False):
     y_2 = D(x_2)
     
     if metric == 'JSD':
+        y_1 = F.sigmoid(y_1)
+        y_2 = F.sigmoid(y_2)
         return np.log(2) + (0.5*torch.mean(torch.log(y_1)) + 0.5*torch.mean(torch.log(1 - y_2))).data.cpu().numpy()
     if metric == 'WD':
         return (torch.mean(y_1) - torch.mean(y_2)).data.cpu().numpy()
@@ -92,4 +96,5 @@ if __name__ == "__main__":
             data_points[1].append(y)
             
         plt.plot(data_points[0], data_points[1], '.')
+        plt.xlim(-1, 1)
         plt.show()
