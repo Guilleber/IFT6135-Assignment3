@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from torch import cuda
 from torch import optim
 from torch import autograd
+from torchvision import transforms
 from classify_svhn import get_data_loader
 from q3_vae import View
 import numpy as np
@@ -11,7 +12,6 @@ import matplotlib.pyplot as plt
 import samplers
 import argparse
 import os
-from PIL import Image
 
 
 parser = argparse.ArgumentParser()
@@ -196,6 +196,7 @@ def evaluation(model):
     :return:
     """
     with torch.no_grad():
+        transf = transforms.ToPILImage()
         z = torch.rand(model.batch_size, model.dimz, device=args.device)
         samples = model.dec(z)
 
@@ -208,8 +209,7 @@ def evaluation(model):
 
         # save the decoder samples
         for i, sample in enumerate(samples):
-            sample = sample.permute(1, 2, 0)
-            im = Image.fromarray(sample.to(device='cpu').numpy().astype('uint8'))
+            im = transf(sample.to(device='cpu'))
             im.save(os.path.join(decoder_dir, "img_{}.jpeg".format(i)))
 
         # perturb the z and get samples
@@ -222,8 +222,7 @@ def evaluation(model):
 
         # save the perturbed samples
         for i, sample in enumerate(samples):
-            sample = sample.permute(1, 2, 0)
-            im = Image.fromarray(sample.to(device='cpu').numpy().astype('uint8'))
+            im = transf(sample.to(device='cpu'))
             im.save(os.path.join(perturb_dir, "p_img_{}.jpeg".format(i)))
 
         int_dir = os.path.join(args.sample_dir, "interpolated_samples")
@@ -233,16 +232,15 @@ def evaluation(model):
         # interpolate between two z's and generate samples. Save them
         for a in range(11):
             z_a = a / 10. * z[0:1] + (1. - a/10.) * z[1:2]
-            gz_a = (model.dec(z_a)[0]).permute(1, 2, 0)
-            im = Image.fromarray(gz_a.to(device='cpu').numpy().astype('uint8'))
+            gz_a = model.dec(z_a)[0]
+            im = transf(gz_a.to(device='cpu'))
             im.save(os.path.join(int_dir, "i1_img_{}.jpeg".format(a)))
 
         # interpolate the result of the two g(z) values
         g_z = model.dec(z[0:2])
         for a in range(11):
             x_a = a / 10. * g_z[0] + (1. - a / 10.) * g_z[1]
-            x_a = x_a.permute(1, 2, 0)
-            im = Image.fromarray(x_a.to(device='cpu').numpy().astype('uint8'))
+            im = transf(x_a.to(device='cpu'))
             im.save(os.path.join(int_dir, "i2_img_{}.jpeg".format(a)))
 
 
