@@ -73,12 +73,44 @@ def extract_features(classifier, data_loader):
 def calculate_fid_score(sample_feature_iterator,
                         testset_feature_iterator):
     """
-    To be implemented by you!
+    Function to calculate the FID score
+    :param sample_feature_iterator:
+    :param testset_feature_iterator:
+    :return:
     """
-    raise NotImplementedError(
-        "TO BE IMPLEMENTED."
-        "Part of Assignment 3 Quantitative Evaluations"
-    )
+    mu_q = torch.zeros(512)
+    sm_q = torch.zeros(512)
+    nb_batches = 0
+    for i, feature in enumerate(sample_feature_iterator):
+        nb_batches = i + 1
+        mu_q += feature
+        sm_q += torch.matmul(feature.view(512, 1), feature.view(1, 512))
+
+    # get the first and second moment estimates of the distribution
+    mu_q /= nb_batches
+    sm_q /= nb_batches
+
+    # get sigma for q
+    sigma_q = sm_q - torch.matmul(mu_q.view(512, 1), mu_q.view(1, 512))
+
+    # do the same for p
+    mu_p = torch.zeros_like(mu_q)
+    sm_p = torch.zeros_like(sm_q)
+    nb_batches = 0
+    for i, feature in enumerate(testset_feature_iterator):
+        nb_batches = i + 1
+        mu_p += feature
+        sm_p += torch.matmul(feature.view(512, 1), feature.view(1, 512))
+
+    mu_p /= nb_batches
+    sm_p /= nb_batches
+
+    sigma_p = sm_p - torch.matmul(mu_p.view(512, 1), mu_p.view(1, 512))
+
+    # compute the FID score
+    fid = torch.norm(mu_q - mu_p) ** 2. + torch.trace(sigma_q + sigma_p -2 * torch.matmul(sigma_p, sigma_q) ** 2.)
+
+    return fid
 
 
 if __name__ == "__main__":
