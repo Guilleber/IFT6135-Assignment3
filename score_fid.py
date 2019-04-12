@@ -79,9 +79,10 @@ def calculate_fid_score(sample_feature_iterator,
     :return:
     """
     mu_q = torch.zeros(512)
-    sm_q = torch.zeros(512)
+    sm_q = torch.zeros(512, 512)
     nb_batches = 0
     for i, feature in enumerate(sample_feature_iterator):
+        feature = torch.from_numpy(feature.astype('float32'))
         nb_batches = i + 1
         mu_q += feature
         sm_q += torch.matmul(feature.view(512, 1), feature.view(1, 512))
@@ -98,6 +99,7 @@ def calculate_fid_score(sample_feature_iterator,
     sm_p = torch.zeros_like(sm_q)
     nb_batches = 0
     for i, feature in enumerate(testset_feature_iterator):
+        feature = torch.from_numpy(feature.astype('float32'))
         nb_batches = i + 1
         mu_p += feature
         sm_p += torch.matmul(feature.view(512, 1), feature.view(1, 512))
@@ -110,7 +112,7 @@ def calculate_fid_score(sample_feature_iterator,
     # compute the FID score
     fid = torch.norm(mu_q - mu_p) ** 2. + torch.trace(sigma_q + sigma_p -2 * torch.matmul(sigma_p, sigma_q) ** 2.)
 
-    return fid
+    return fid.item()
 
 
 if __name__ == "__main__":
