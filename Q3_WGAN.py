@@ -125,7 +125,7 @@ def train_model(g, d, train, valid, save_path):
     turn = 0
 
     for epoch in range(20):
-        for batch, i in train:
+        for i, (batch, label) in enumerate(train):
             # put batch on device
             batch = batch.to(args.device)
 
@@ -163,7 +163,7 @@ def train_model(g, d, train, valid, save_path):
         # compute the loss for the validation set
         valid_loss = torch.zeros(1)
         nb_batches = 0
-        for batch, i in valid:
+        for i, (batch, label) in enumerate(valid):
             nb_batches += 1
             batch = batch.to(args.device)
             real_prob = d(batch)
