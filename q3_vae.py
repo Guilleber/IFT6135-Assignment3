@@ -198,7 +198,7 @@ if __name__ == "__main__":
 
     # Create model. Load or train depending on choice
     model = VAE(batch_size=args.batch_size, dimz=args.dimz)
-    if parser.parse_args().t:
+    if args.t:
         train_model(model, train, valid, args.save_path)
     else:
         model.load_state_dict(torch.load(args.load_path))

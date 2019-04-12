@@ -194,7 +194,7 @@ if __name__ == "__main__":
     # Create model. Load or train depending on choice
     g = G(args.batch_size, args.dimz)
     d = D(args.batch_size, args.dimz)
-    if parser.parse_args().t:
+    if args.t:
         train_model(g, d, train, valid, args.save_path)
     else:
         state_dict = torch.load(args.load_path)
