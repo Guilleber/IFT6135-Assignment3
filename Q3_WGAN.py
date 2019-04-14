@@ -21,10 +21,10 @@ parser.add_argument("--load_path", type=str, default="q3_gan.pt")
 parser.add_argument("--batch_size", type=int, default=32, help="Size of the mini-batches")
 parser.add_argument("--dimz", type=int, default=100, help="Dimension of the latent variables")
 parser.add_argument("--data_dir", type=str, default="svhn.mat", help="SVHN dataset location")
-parser.add_argument("--lam",  type=int, default=20, help="Lambda coefficient for the regularizer in"
+parser.add_argument("--lam",  type=int, default=10, help="Lambda coefficient for the regularizer in"
                                                             "in the WGAN-GP loss")
-parser.add_argument("--lr", type=float, default=3e-4, help="Learning rate for the optimzer")
-parser.add_argument("--update_ratio", type=int, default=20, help="The number of updates to  the discriminator"
+parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate for the optimzer")
+parser.add_argument("--update_ratio", type=int, default=5, help="The number of updates to  the discriminator"
                                                                  "before one update to the generator")
 parser.add_argument("--eps", type=float, default=1e-1, help="Perturbation value to the latent when evaluating")
 parser.add_argument("--sample_dir", type=str, default="samples", help="Directory containing samples for"
@@ -67,7 +67,7 @@ class D(nn.Module):
     def forward(self, x):
         out = self.convs(x)[:, 0]
         return out
-    
+
 
 class G(nn.Module):
 
@@ -75,7 +75,7 @@ class G(nn.Module):
         super().__init__()
         self.batch_size = batch_size
         self.dimz = dimz
-        
+
         self.deconvs = nn.Sequential(
             # layer 1
             nn.Linear(self.dimz, 4 * 4 * 512),
@@ -109,7 +109,7 @@ def wgan_gp_loss(real, fake, grad, lam):
     :param: The lambda factor applied for regularization
     :return: The WGAN-GP loss over all elements in the mini-batch. Size is [batch_size,]
     """
-    return real - fake - lam * (torch.sqrt((grad**2.).sum(dim=1)) - 1)**2
+    return real - fake - lam * (torch.norm(grad, dim=1) - 1)**2
 
 
 def train_model(g, d, train, valid, save_path):
@@ -122,10 +122,10 @@ def train_model(g, d, train, valid, save_path):
     :return:
     """
     # optimizer for the network
-    g_optim = optim.Adam(g.parameters(), lr=3e-4)
-    d_optim = optim.Adam(d.parameters(), lr=3e-4)
+    g_optim = optim.Adam(g.parameters(), lr=args.lr, betas=(0, 0.9))
+    d_optim = optim.Adam(d.parameters(), lr=args.lr, betas=(0, 0.9))
 
-    # variable to remember whose turn it is to update its parameters
+    # variable to determine whose turn it is to update its parameters
     turn = 0
 
     for epoch in range(20):
@@ -133,33 +133,42 @@ def train_model(g, d, train, valid, save_path):
             # put batch on device
             batch = batch.to(args.device)
 
-            # obtain the discriminator output on real data
-            real_prob = d(batch)
-
-            # obtain the discriminator output on the fake data
-            z = torch.randn(batch.size()[0], g.dimz, device=args.device)
-            fake = g(z)
-            fake_prob = d(fake)
-
-            # obtain the gradient term of the WGAN-GP loss
-            a = torch.rand_like(batch, device=args.device)
-            conv = a * batch + (1 - a) * fake
-            d_conv = d(conv)
-            grad = autograd.grad(d_conv, conv, torch.ones_like(d_conv).to(args.device),
-                                 retain_graph=True, create_graph=True, only_inputs=True)[0]
-
-            # compute the WGAN-GP loss
-            loss = wgan_gp_loss(real_prob, fake_prob, grad.view(-1, 3*32*32), args.lam).mean()
-
-            # minimize the loss
-            autograd.backward([-loss])
-
-            # Update the parameters and zero the gradients for the next mini-batch
             if turn // args.update_ratio == 0:
+
+                # obtain the discriminator output on real data
+                real_prob = d(batch)
+
+                # obtain the discriminator output on the fake data
+                z = torch.randn(batch.size()[0], g.dimz, device=args.device)
+                fake = g(z)
+                fake_prob = d(fake)
+
+                # obtain the gradient term of the WGAN-GP loss
+                a = torch.rand_like(batch, device=args.device)
+                conv = a * batch + (1 - a) * fake
+                d_conv = d(conv)
+                grad = autograd.grad(d_conv, conv, torch.ones_like(d_conv).to(args.device),
+                                     retain_graph=True, create_graph=True, only_inputs=True)[0]
+
+                # compute the WGAN-GP loss
+                loss = wgan_gp_loss(real_prob, fake_prob, grad.view(-1, 3*32*32), args.lam).mean()
+
+                # minimize the loss
+                autograd.backward([-loss])
+
+                # update the parameters
                 d_optim.step()
                 d_optim.zero_grad()
+
                 turn += 1
+
             else:
+                # update the generator
+                z = torch.randn(batch.size()[0], g.dimz, device=args.device)
+                fake = g(z)
+                fake_prob = d(fake)
+                loss = - fake_prob.mean()
+                loss.backward()
                 g_optim.step()
                 g_optim.zero_grad()
                 turn = 0
@@ -184,7 +193,7 @@ def train_model(g, d, train, valid, save_path):
                     grad = autograd.grad(d_conv, conv, torch.ones_like(d_conv).to(args.device),
                                          retain_graph=False, create_graph=True, only_inputs=True)[0]
                 batch_loss = wgan_gp_loss(real_prob, fake_prob, grad.view(-1, 3*32*32), args.lam)
-                valid_loss += batch_loss.sum()
+                valid_loss += batch_loss.mean()
             valid_loss /= nb_batches
             print("After epoch {} the validation loss is: ".format(epoch+1), valid_loss.item())
 
