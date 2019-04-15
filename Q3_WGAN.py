@@ -4,12 +4,14 @@ import torch.nn.functional as F
 from torch import cuda
 from torch import optim
 from torch import autograd
+from torchvision import transforms
 from classify_svhn import get_data_loader
 from q3_vae import View
 import numpy as np
 import matplotlib.pyplot as plt
 import samplers
 import argparse
+import os
 
 
 parser = argparse.ArgumentParser()
@@ -18,12 +20,15 @@ parser.add_argument("--save_path", type=str, default="q3_gan.pt")
 parser.add_argument("--load_path", type=str, default="q3_gan.pt")
 parser.add_argument("--batch_size", type=int, default=32, help="Size of the mini-batches")
 parser.add_argument("--dimz", type=int, default=100, help="Dimension of the latent variables")
-parser.add_argument("--data_path", type=str, default="svhn.mat", help="SVHN dataset location")
-parser.add_argument("--lam",  type=int, default=20, help="Lambda coefficient for the regularizer in"
+parser.add_argument("--data_dir", type=str, default="svhn.mat", help="SVHN dataset location")
+parser.add_argument("--lam",  type=int, default=10, help="Lambda coefficient for the regularizer in"
                                                             "in the WGAN-GP loss")
-parser.add_argument("--lr", type=float, default=3e-4, help="Learning rate for the optimzer")
-parser.add_argument("--update_ratio", type=int, default=20, help="The number of updates to  the discriminator"
+parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate for the optimzer")
+parser.add_argument("--update_ratio", type=int, default=5, help="The number of updates to  the discriminator"
                                                                  "before one update to the generator")
+parser.add_argument("--eps", type=float, default=1e-1, help="Perturbation value to the latent when evaluating")
+parser.add_argument("--sample_dir", type=str, default="samples", help="Directory containing samples for"
+                                                                      "evaluation")
 
 # get the arguments
 args = parser.parse_args()
@@ -50,7 +55,7 @@ class D(nn.Module):
             nn.LeakyReLU(negative_slope=0.2),
 
             # layer 4
-            View(self.batch_size, 4*4*512),
+            View(-1, 4*4*512),
             nn.Linear(4 * 4 * 512, self.dimz),
             nn.LeakyReLU(2e-2),
 
@@ -60,9 +65,9 @@ class D(nn.Module):
         )
 
     def forward(self, x):
-        out = self.convs(x)
+        out = self.convs(x)[:, 0]
         return out
-    
+
 
 class G(nn.Module):
 
@@ -70,12 +75,12 @@ class G(nn.Module):
         super().__init__()
         self.batch_size = batch_size
         self.dimz = dimz
-        
+
         self.deconvs = nn.Sequential(
             # layer 1
             nn.Linear(self.dimz, 4 * 4 * 512),
             nn.LeakyReLU(2e-2),
-            View(self.batch_size, 512, 4, 4),
+            View(-1, 512, 4, 4),
 
             # layer2
             nn.ConvTranspose2d(512, 256, 4, padding=1, stride=2),
@@ -104,7 +109,7 @@ def wgan_gp_loss(real, fake, grad, lam):
     :param: The lambda factor applied for regularization
     :return: The WGAN-GP loss over all elements in the mini-batch. Size is [batch_size,]
     """
-    return real - fake - lam * (torch.sqrt((grad**2.).sum(dim=1)) - 1)**2
+    return real - fake - lam * (torch.norm(grad, dim=1) - 1)**2
 
 
 def train_model(g, d, train, valid, save_path):
@@ -117,10 +122,10 @@ def train_model(g, d, train, valid, save_path):
     :return:
     """
     # optimizer for the network
-    g_optim = optim.Adam(g.parameters(), lr=3e-4)
-    d_optim = optim.Adam(d.parameters(), lr=3e-4)
+    g_optim = optim.Adam(g.parameters(), lr=args.lr, betas=(0, 0.9))
+    d_optim = optim.Adam(d.parameters(), lr=args.lr, betas=(0, 0.9))
 
-    # variable to remember whose turn it is to update its parameters
+    # variable to determine whose turn it is to update its parameters
     turn = 0
 
     for epoch in range(20):
@@ -128,59 +133,127 @@ def train_model(g, d, train, valid, save_path):
             # put batch on device
             batch = batch.to(args.device)
 
-            # obtain the discriminator output on real data
-            real_prob = d(batch)
-
-            # obtain the discriminator output on the fake data
-            z = torch.randn(g.batch_size, g.dimz, device=args.device)
-            fake = g(z)
-            fake_prob = d(fake)
-
-            # obtain the gradient term of the WGAN-GP loss
-            a = torch.rand_like(batch, device=args.device)
-            conv = a * batch + (1 - a) * fake
-            d_conv = d(conv)
-            grad = autograd.grad(d_conv, conv, torch.ones_like(d_conv).to(args.device),
-                                 retain_graph=True, create_graph=True, only_inputs=True)[0]
-
-            # compute the WGAN-GP loss
-            loss = wgan_gp_loss(real_prob, fake_prob, grad.view(-1, 3*32*32), args.lam).mean()
-
-            # minimize the loss
-            autograd.backward([-loss])
-
-            # Update the parameters and zero the gradients for the next mini-batch
             if turn // args.update_ratio == 0:
+
+                # obtain the discriminator output on real data
+                real_prob = d(batch)
+
+                # obtain the discriminator output on the fake data
+                z = torch.randn(batch.size()[0], g.dimz, device=args.device)
+                fake = g(z)
+                fake_prob = d(fake)
+
+                # obtain the gradient term of the WGAN-GP loss
+                a = torch.rand_like(batch, device=args.device)
+                conv = a * batch + (1 - a) * fake
+                d_conv = d(conv)
+                grad = autograd.grad(d_conv, conv, torch.ones_like(d_conv).to(args.device),
+                                     retain_graph=True, create_graph=True, only_inputs=True)[0]
+
+                # compute the WGAN-GP loss
+                loss = wgan_gp_loss(real_prob, fake_prob, grad.view(-1, 3*32*32), args.lam).mean()
+
+                # minimize the loss
+                autograd.backward([-loss])
+
+                # update the parameters
                 d_optim.step()
                 d_optim.zero_grad()
+
                 turn += 1
+
             else:
+                # update the generator
+                z = torch.randn(batch.size()[0], g.dimz, device=args.device)
+                fake = g(z)
+                fake_prob = d(fake)
+                loss = - fake_prob.mean()
+                loss.backward()
                 g_optim.step()
                 g_optim.zero_grad()
                 turn = 0
 
         # compute the loss for the validation set
-        valid_loss = torch.zeros(1)
-        nb_batches = 0
-        for i, (batch, label) in enumerate(valid):
-            nb_batches += 1
-            batch = batch.to(args.device)
-            real_prob = d(batch)
-            z = torch.randn(g.batch_size, g.dimz, device=args.device)
-            fake = g(z)
-            fake_prob = d(fake)
-            a = torch.randn_like(batch, device=args.device)
-            conv = a * batch + (1. - a) * fake
-            d_conv = d(g(conv))
-            grad = autograd.grad(d_conv, conv, torch.ones_like(d_conv).to(args.device),
-                                 retain_graph=True, create_graph=True, only_inputs=True)[0]
-            batch_loss = wgan_gp_loss(real_prob, fake_prob, grad.view(-1, 3*32*32), args.lam)
-            valid_loss += batch_loss
-        valid_loss /= nb_batches
-        print("After epoch {} the validation loss is: ".format(epoch+1), valid_loss.item())
+        with torch.no_grad():
+            valid_loss = torch.zeros(1)
+            nb_batches = 0
+            for i, (batch, label) in enumerate(valid):
+                nb_batches += 1
+                batch = batch.to(args.device)
+                real_prob = d(batch)
+                z = torch.randn(batch.size()[0], g.dimz, device=args.device)
+                fake = g(z)
+                fake_prob = d(fake)
+                a = torch.randn_like(batch, device=args.device)
+
+                with torch.enable_grad():
+                    conv = a * batch + (1. - a) * fake
+                    conv.requires_grad = True
+                    d_conv = d(conv)
+                    grad = autograd.grad(d_conv, conv, torch.ones_like(d_conv).to(args.device),
+                                         retain_graph=False, create_graph=True, only_inputs=True)[0]
+                batch_loss = wgan_gp_loss(real_prob, fake_prob, grad.view(-1, 3*32*32), args.lam)
+                valid_loss += batch_loss.mean()
+            valid_loss /= nb_batches
+            print("After epoch {} the validation loss is: ".format(epoch+1), valid_loss.item())
 
     # save the model to be used later
-    torch.save({"generator": g.state_dict(), "discriminator": d}, save_path)
+    torch.save(g.state_dict(), save_path)
+
+
+def evaluation(model):
+    """
+    Function that generates samples for the qualitative evaluation of the model
+    :param model: The model from which we pull samples
+    :return:
+    """
+    with torch.no_grad():
+        transf = transforms.ToPILImage()
+        z = torch.rand(model.batch_size, model.dimz, device=args.device)
+        samples = model.dec(z)
+
+        if not os.path.isdir(args.sample_dir):
+            os.mkdir(args.sample_dir)
+
+        decoder_dir = os.path.join(args.sample_dir, "decoder_samples")
+        if not os.path.isdir(decoder_dir):
+            os.mkdir(decoder_dir)
+
+        # save the decoder samples
+        for i, sample in enumerate(samples):
+            im = transf(sample.to(device='cpu'))
+            im.save(os.path.join(decoder_dir, "img_{}.jpeg".format(i)))
+
+        # perturb the z and get samples
+        z_ = z + args.eps
+        samples = model.dec(z_)
+
+        perturb_dir = os.path.join(args.sample_dir, "perturbed_samples")
+        if not os.path.isdir(perturb_dir):
+            os.mkdir(perturb_dir)
+
+        # save the perturbed samples
+        for i, sample in enumerate(samples):
+            im = transf(sample.to(device='cpu'))
+            im.save(os.path.join(perturb_dir, "p_img_{}.jpeg".format(i)))
+
+        int_dir = os.path.join(args.sample_dir, "interpolated_samples")
+        if not os.path.isdir(int_dir):
+            os.mkdir(int_dir)
+
+        # interpolate between two z's and generate samples. Save them
+        for a in range(11):
+            z_a = a / 10. * z[0:1] + (1. - a/10.) * z[1:2]
+            gz_a = model.dec(z_a)[0]
+            im = transf(gz_a.to(device='cpu'))
+            im.save(os.path.join(int_dir, "i1_img_{}.jpeg".format(a)))
+
+        # interpolate the result of the two g(z) values
+        g_z = model.dec(z[0:2])
+        for a in range(11):
+            x_a = a / 10. * g_z[0] + (1. - a / 10.) * g_z[1]
+            im = transf(x_a.to(device='cpu'))
+            im.save(os.path.join(int_dir, "i2_img_{}.jpeg".format(a)))
 
 
 if __name__ == "__main__":
@@ -189,18 +262,15 @@ if __name__ == "__main__":
     args.device = device
 
     # load the dataset
-    train, valid, test = get_data_loader(args.data_path, args.batch_size)
+    train, valid, test = get_data_loader(args.data_dir, args.batch_size)
 
     # Create model. Load or train depending on choice
-    g = G(args.batch_size, args.dimz)
-    d = D(args.batch_size, args.dimz)
-    if parser.parse_args().t:
+    g = G(args.batch_size, args.dimz).to(args.device)
+    d = D(args.batch_size, args.dimz).to(args.device)
+    if args.t:
         train_model(g, d, train, valid, args.save_path)
     else:
-        state_dict = torch.load(args.load_path)
-        g.load_state_dict(state_dict["generator"])
+        g.load_state_dict(torch.load(args.load_path))
         g.eval()
-        d.load_state_dict(state_dict["discriminator"])
-        d.eval()
 
-    # Evaluate part
+        evaluation(g)

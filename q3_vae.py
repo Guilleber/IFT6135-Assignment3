@@ -4,10 +4,11 @@ from torch import optim
 from torch import autograd
 from torch.nn import functional as F
 from torch import cuda
+from torchvision import transforms
 from classify_svhn import get_data_loader
 import numpy as np
 import argparse
-import gc
+import os
 
 
 parser = argparse.ArgumentParser()
@@ -16,7 +17,10 @@ parser.add_argument("--save_path", type=str, default="q3_vae.pt")
 parser.add_argument("--load_path", type=str, default="q3_vae.pt")
 parser.add_argument("--batch_size", type=int, default=32, help="Size of the mini-batches")
 parser.add_argument("--dimz", type=int, default=100, help="Dimension of the latent variables")
-parser.add_argument("--data_path", type=str, default="svhn.mat", help="SVHN dataset location")
+parser.add_argument("--data_dir", type=str, default="svhn.mat", help="SVHN dataset location")
+parser.add_argument("--eps", type=float, default=1e-1, help="Perturbation value to the latent when evaluating")
+parser.add_argument("--sample_dir", type=str, default="samples", help="Directory containing samples for"
+                                                                      "evaluation")
 
 # get the arguments
 args = parser.parse_args()
@@ -60,14 +64,14 @@ class VAE(nn.Module):
             nn.LeakyReLU(2e-2),
 
             # Layer 4
-            View(self.batch_size, 4*4*512),
+            View(-1, 4*4*512),
             nn.Linear(4*4*512, 2*self.dimz)
         )
 
         self.dec = nn.Sequential(
             # Layer 1
             nn.Linear(self.dimz, 4*4*512),
-            View(self.batch_size, 512, 4, 4),
+            View(-1, 512, 4, 4),
             nn.BatchNorm2d(512),
             nn.LeakyReLU(2e-2),
 
@@ -135,7 +139,7 @@ def ll(x, x_):
     :return:
     """
     k = x.size()[1]
-    return -k/2 * torch.log(2 * np.pi * torch.ones(1)) -0.5 * ((x - x_)**2.).mean(dim=1)
+    return -k/2 * torch.log(2 * np.pi * torch.ones(1, device=args.device)) -0.5 * ((x - x_)**2.).sum(dim=1)
 
 
 def train_model(model, train, valid, save_path):
@@ -172,20 +176,76 @@ def train_model(model, train, valid, save_path):
             adam.zero_grad()
 
         # compute the loss for the validation set
-        valid_elbo = torch.zeros(1)
-        nb_batches = 0
-        for i, (batch, label) in enumerate(valid):
-            nb_batches += 1
-            batch = batch.to(args.device)
-            mu, log_sigma, g_z = model(batch)
-            kl = kl_div(mu, log_sigma)
-            logpx_z = ll(valid.view(-1, 3*32*32), g_z.view(-1, 3*32*32))
-            valid_elbo += (logpx_z - kl).mean()
-        valid_elbo /= nb_batches
-        print("After epoch {} the validation loss is: ".format(epoch+1), valid_elbo.item())
+        with torch.no_grad():
+            valid_elbo = torch.zeros(1)
+            nb_batches = 0
+            for i, (batch, label) in enumerate(valid):
+                nb_batches += 1
+                batch = batch.to(args.device)
+                mu, log_sigma, g_z = model(batch)
+                kl = kl_div(mu, log_sigma)
+                logpx_z = ll(batch.view(-1, 3*32*32), g_z.view(-1, 3*32*32))
+                valid_elbo += (logpx_z - kl).mean()
+            valid_elbo /= nb_batches
+            print("After epoch {} the validation loss is: ".format(epoch+1), valid_elbo.item())
 
     # save the model to be used later
     torch.save(model.state_dict(), save_path)
+
+
+def evaluation(model):
+    """
+    Function that generates samples for the qualitative evaluation of the model
+    :param model: The model from which we pull samples
+    :return:
+    """
+    with torch.no_grad():
+        transf = transforms.ToPILImage()
+        z = torch.rand(model.batch_size, model.dimz, device=args.device)
+        samples = model.dec(z)
+
+        if not os.path.isdir(args.sample_dir):
+            os.mkdir(args.sample_dir)
+
+        decoder_dir = os.path.join(args.sample_dir, "decoder_samples")
+        if not os.path.isdir(decoder_dir):
+            os.mkdir(decoder_dir)
+
+        # save the decoder samples
+        for i, sample in enumerate(samples):
+            im = transf(sample.to(device='cpu'))
+            im.save(os.path.join(decoder_dir, "img_{}.jpeg".format(i)))
+
+        # perturb the z and get samples
+        z_ = z + args.eps
+        samples = model.dec(z_)
+
+        perturb_dir = os.path.join(args.sample_dir, "perturbed_samples")
+        if not os.path.isdir(perturb_dir):
+            os.mkdir(perturb_dir)
+
+        # save the perturbed samples
+        for i, sample in enumerate(samples):
+            im = transf(sample.to(device='cpu'))
+            im.save(os.path.join(perturb_dir, "p_img_{}.jpeg".format(i)))
+
+        int_dir = os.path.join(args.sample_dir, "interpolated_samples")
+        if not os.path.isdir(int_dir):
+            os.mkdir(int_dir)
+
+        # interpolate between two z's and generate samples. Save them
+        for a in range(11):
+            z_a = a / 10. * z[0:1] + (1. - a/10.) * z[1:2]
+            gz_a = model.dec(z_a)[0]
+            im = transf(gz_a.to(device='cpu'))
+            im.save(os.path.join(int_dir, "i1_img_{}.jpeg".format(a)))
+
+        # interpolate the result of the two g(z) values
+        g_z = model.dec(z[0:2])
+        for a in range(11):
+            x_a = a / 10. * g_z[0] + (1. - a / 10.) * g_z[1]
+            im = transf(x_a.to(device='cpu'))
+            im.save(os.path.join(int_dir, "i2_img_{}.jpeg".format(a)))
 
 
 if __name__ == "__main__":
@@ -194,14 +254,13 @@ if __name__ == "__main__":
     args.device = device
 
     # load the dataset
-    train, valid, test = get_data_loader(args.data_path, args.batch_size)
+    train, valid, test = get_data_loader(args.data_dir, args.batch_size)
 
     # Create model. Load or train depending on choice
-    model = VAE(batch_size=args.batch_size, dimz=args.dimz)
-    if parser.parse_args().t:
+    model = VAE(batch_size=args.batch_size, dimz=args.dimz).to(args.device)
+    if args.t:
         train_model(model, train, valid, args.save_path)
     else:
         model.load_state_dict(torch.load(args.load_path))
         model.eval()
-
-    # Evaluate part
+        evaluation(model)
