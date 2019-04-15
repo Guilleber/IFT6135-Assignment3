@@ -140,22 +140,14 @@ if __name__ == "__main__":
         dist4 = samplers.distribution4(batch_size=256)
         dist3 = samplers.distribution3(batch_size=256)
 
-        D = train('JSD', dist4, dist3, args.use_cuda,args.setup)
+        D = train('JSD', dist4, dist3, args.use_cuda, args.setup)
 
         #dist1 = samplers.distribution4(batch_size=1)
         #dist0 = samplers.distribution3(batch_size=1)
-        data_points_D = []
-        data_points_d4 = []
-        print(xx)
-        for x in xx:
-            if args.use_cuda:
-                y=D(torch.from_numpy(np.array([N(x)])).float().cuda())
-            else:
-                y=D(torch.from_numpy(np.array([N(x)])).float())
-            data_points_D.append(y)
-            data_points_d4.extend(N(x)*y/(1-y))
-        print(data_points_D)
-        print(data_points_d4)
+        input = torch.from_numpy(xx).float().cuda() if args.use_cuda else torch.from_numpy(xx).float()
+        input = torch.unsqueeze(input, 1)
+        D_xx = torch.squeeze(F.sigmoid(D(input)), 1).data.cpu().numpy()
+        f_estimate = N(xx)*D_xx/(1-D_xx)
 
 
 
@@ -165,13 +157,13 @@ if __name__ == "__main__":
 
 
 
-        r = data_points_D # evaluate xx using your discriminator; replace xx with the output
+        r = D_xx # evaluate xx using your discriminator; replace xx with the output
         plt.figure(figsize=(8,4))
         plt.subplot(1,2,1)
         plt.plot(xx,r)
         plt.title(r'$D(x)$')
 
-        estimate = data_points_d4 # estimate the density of distribution4 (on xx) using the discriminator;
+        estimate = f_estimate # estimate the density of distribution4 (on xx) using the discriminator;
                                 # replace "np.ones_like(xx)*0." with your estimate
         plt.subplot(1,2,2)
         plt.plot(xx,estimate)
