@@ -145,7 +145,7 @@ def train_model(g, d, train, valid, save_path):
             fake_prob = d(fake)
 
             # obtain the gradient term of the WGAN-GP loss
-            a = torch.rand(args.batch_size, device=args.device)
+            a = torch.rand(batch.size()[0], device=args.device)
             conv = a * batch + (1. - a) * fake
             d_conv = d(conv)
             grad = autograd.grad(d_conv, conv, torch.ones_like(d_conv).to(args.device),
@@ -183,7 +183,7 @@ def train_model(g, d, train, valid, save_path):
                 fake = g(z)
                 display(((fake[0] + 1.) * 255.).to(device='cpu', copy=True)).show()
                 fake_prob = d(fake)
-                a = torch.rand(args.batch_size, device=args.device)
+                a = torch.rand(batch.size()[0], device=args.device)
 
                 with torch.enable_grad():
                     conv = a * batch + (1. - a) * fake
