@@ -140,13 +140,13 @@ def train_model(g, d, train, valid, save_path):
             real_prob = d(batch)
 
             # obtain the discriminator output on the fake data
-            z = torch.randn(batch.size()[0], g.dimz, device=args.device)
+            z = torch.randn(args.batch_size, g.dimz, device=args.device)
             fake = g(z)
             fake_prob = d(fake)
 
             # obtain the gradient term of the WGAN-GP loss
-            a = torch.rand_like(batch, device=args.device)
-            conv = a * batch + (1 - a) * fake
+            a = torch.rand(args.batch_size, device=args.device)
+            conv = a * batch + (1. - a) * fake
             d_conv = d(conv)
             grad = autograd.grad(d_conv, conv, torch.ones_like(d_conv).to(args.device),
                                  retain_graph=True, create_graph=True, only_inputs=True)[0]
@@ -183,7 +183,7 @@ def train_model(g, d, train, valid, save_path):
                 fake = g(z)
                 display(((fake[0] + 1.) * 255.).to(device='cpu', copy=True)).show()
                 fake_prob = d(fake)
-                a = torch.rand_like(batch, device=args.device)
+                a = torch.rand(args.batch_size, device=args.device)
 
                 with torch.enable_grad():
                     conv = a * batch + (1. - a) * fake
