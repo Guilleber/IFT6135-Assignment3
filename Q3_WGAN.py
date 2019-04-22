@@ -111,7 +111,7 @@ def wgan_gp_loss(real, fake, grad, lam):
     :param: The lambda factor applied for regularization
     :return: The WGAN-GP loss over all elements in the mini-batch. Size is [batch_size,]
     """
-    return fake - real + lam * (torch.norm(grad, dim=1) - 1)**2
+    return fake - real + lam * (torch.norm(grad, dim=1) - 1.)**2
 
 
 def train_model(g, d, train, valid, save_path):
@@ -140,12 +140,13 @@ def train_model(g, d, train, valid, save_path):
 
             # obtain the discriminator output on the fake data
             z = torch.randn(batch.size()[0], g.dimz, device=args.device)
-            fake = g(z)
+            fake = g(z).detach()
             fake_prob = d(fake)
 
             # obtain the gradient term of the WGAN-GP loss
             a = torch.rand(batch.size()[0], 1, 1, 1, device=args.device)
             conv = a * batch + (1. - a) * fake
+            conv.requires_grad = True
             d_conv = d(conv)
             grad = autograd.grad(d_conv, conv, torch.ones_like(d_conv).to(args.device),
                                  retain_graph=True, create_graph=True, only_inputs=True)[0]
@@ -154,7 +155,7 @@ def train_model(g, d, train, valid, save_path):
             loss = wgan_gp_loss(real_prob, fake_prob, grad.view(-1, 3 * 32 * 32), args.lam).mean()
 
             # minimize the loss
-            autograd.backward([loss])
+            autograd.backward(loss)
 
             # update the parameters
             d_optim.step()
@@ -168,7 +169,7 @@ def train_model(g, d, train, valid, save_path):
                 loss = - fake_prob.mean()
                 loss.backward()
                 g_optim.step()
-                g_optim.zero_grad()
+                g.zero_grad()
 
         with torch.no_grad():
             # After training for an epoch, output validation loss
