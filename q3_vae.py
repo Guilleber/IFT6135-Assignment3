@@ -71,7 +71,7 @@ class VAE(nn.Module):
         self.dec = nn.Sequential(
             # Layer 1
             nn.Linear(self.dimz, 4*4*512),
-            nn.BatchNorm1d(),
+            nn.BatchNorm1d(4*4*512),
             nn.ReLU(),
             View(-1, 512, 4, 4),
 
