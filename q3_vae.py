@@ -18,6 +18,7 @@ parser.add_argument("--load_path", type=str, default="q3_vae.pt")
 parser.add_argument("--batch_size", type=int, default=32, help="Size of the mini-batches")
 parser.add_argument("--dimz", type=int, default=100, help="Dimension of the latent variables")
 parser.add_argument("--data_dir", type=str, default="svhn.mat", help="SVHN dataset location")
+parser.add_argument("--nb_epochs", type=int, default=20, help = "The number of epochs for training")
 parser.add_argument("--eps", type=float, default=1e-1, help="Perturbation value to the latent when evaluating")
 parser.add_argument("--sample_dir", type=str, default="samples", help="Directory containing samples for"
                                                                       "evaluation")
@@ -49,45 +50,43 @@ class VAE(nn.Module):
 
         self.enc = nn.Sequential(
             # Layer 1
-            nn.Conv2d(3, 128, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm2d(128),
-            nn.LeakyReLU(2e-2),
+            nn.Conv2d(3, 64, kernel_size=5, stride=2),
+            nn.LeakyReLU(2e-1),
 
             #  Layer 2
-            nn.Conv2d(128, 256, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm2d(256),
-            nn.LeakyReLU(2e-2),
+            nn.Conv2d(64, 128, kernel_size=5, stride=2),
+            nn.BatchNorm2d(128),
+            nn.LeakyReLU(2e-1),
 
             # Layer 3
-            nn.Conv2d(256, 512, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm2d(512),
-            nn.LeakyReLU(2e-2),
+            nn.Conv2d(128, 256, kernel_size=5, stride=2),
+            nn.BatchNorm2d(256),
+            nn.LeakyReLU(2e-1),
 
             # Layer 4
-            View(-1, 4*4*512),
-            nn.Linear(4*4*512, 2*self.dimz)
+            nn.Conv2d(256, 1, kernel_size=5, stride=2),
+            View(-1, 4*4*1)
         )
 
         self.dec = nn.Sequential(
             # Layer 1
             nn.Linear(self.dimz, 4*4*512),
+            nn.BatchNorm1d(),
+            nn.ReLU(),
             View(-1, 512, 4, 4),
-            nn.BatchNorm2d(512),
-            nn.LeakyReLU(2e-2),
 
             # Layer 2
-            nn.ConvTranspose2d(512, 256, kernel_size=4, stride=2, padding=1),
+            nn.ConvTranspose2d(512, 256, kernel_size=5, stride=2, padding=2, output_padding=1),
             nn.BatchNorm2d(256),
-            nn.LeakyReLU(2e-2),
+            nn.ReLU(),
 
             # Layer 3
-            nn.ConvTranspose2d(256, 128, kernel_size=4, stride=2, padding=1),
+            nn.ConvTranspose2d(256, 128, kernel_size=5, stride=2, padding=2, output_padding=1),
             nn.BatchNorm2d(128),
-            nn.LeakyReLU(2e-2),
+            nn.ReLU(),
 
             # Layer 4
-            nn.ConvTranspose2d(128, 3, kernel_size=4, stride=2, padding=1),
-            nn.LeakyReLU(2e-2)
+            nn.ConvTranspose2d(128, 3, kernel_size=4, stride=2, padding=1)
         )
 
     def forward(self, x):
@@ -153,7 +152,7 @@ def train_model(model, train, valid, save_path):
     # optimizer for the network
     adam = optim.Adam(model.parameters(), lr=3e-4)
 
-    for epoch in range(20):
+    for epoch in range(args.nb_epochs):
         for i, (batch, label) in enumerate(train):
             # put batch on device
             batch = batch.to(args.device)
