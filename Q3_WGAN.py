@@ -21,7 +21,7 @@ parser.add_argument("--load_path", type=str, default="q3_gan.pt")
 parser.add_argument("--batch_size", type=int, default=128, help="Size of the mini-batches")
 parser.add_argument("--dimz", type=int, default=100, help="Dimension of the latent variables")
 parser.add_argument("--data_dir", type=str, default="svhn.mat", help="SVHN dataset location")
-parser.add_argument("--nb_epochs", type=int, default=20, help = "The number of epochs for training")
+parser.add_argument("--nb_epochs", type=int, default=25, help = "The number of epochs for training")
 parser.add_argument("--lam",  type=int, default=10, help="Lambda coefficient for the regularizer in"
                                                             "in the WGAN-GP loss")
 parser.add_argument("--lr", type=float, default=2e-4, help="Learning rate for the optimzer")
@@ -44,23 +44,22 @@ class D(nn.Module):
 
         self.convs = nn.Sequential(
             # layer1
-            nn.Conv2d(3, 128, 5, padding=2, stride=2),
+            nn.Conv2d(3, 64, 5, padding=2, stride=2),
             nn.LeakyReLU(0.2),
 
             # layer2
-            nn.Conv2d(128, 256, 5, padding=2, stride=2),
+            nn.Conv2d(64, 128, 5, padding=2, stride=2),
             nn.BatchNorm2d(256),
             nn.LeakyReLU(0.2),
 
             # layer3
-            nn.Conv2d(256, 512, 5, padding=2, stride=2),
-            nn.BatchNorm2d(512),
+            nn.Conv2d(128, 256, 5, padding=2, stride=2),
+            nn.BatchNorm2d(256),
             nn.LeakyReLU(0.2),
 
             # layer 4
-            View(-1, 4*4*512),
-            nn.Linear(4 * 4 * 512, 1),
-            nn.BatchNorm1d(1),  # may have to remove
+            nn.Conv2d(256, 1, 5, padding=2, stride=2),
+            View(-1, 4*4*1),
             nn.Sigmoid(),
         )
 
