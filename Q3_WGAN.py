@@ -21,7 +21,8 @@ parser.add_argument("--load-path", type=str, default="q3_gan.pt")
 parser.add_argument("--batch-size", type=int, default=128, help="Size of the mini-batches")
 parser.add_argument("--dimz", type=int, default=100, help="Dimension of the latent variables")
 parser.add_argument("--data-dir", type=str, default="svhn.mat", help="SVHN dataset location")
-parser.add_argument("--nb-epochs", type=int, action="store", default=20, help = "The number of epochs for training")
+parser.add_argument("--nb-epochs", type=int, action="store", default=20, help = "The number of epochs for training",
+                    dest="nb-epochs")
 parser.add_argument("--lam",  type=int, default=10, help="Lambda coefficient for the regularizer in"
                                                             "in the WGAN-GP loss")
 parser.add_argument("--lr", type=float, default=2e-4, help="Learning rate for the optimzer")
