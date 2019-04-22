@@ -18,7 +18,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("-t", action="store_true", help="Flag to specify if we train the model")
 parser.add_argument("--save_path", type=str, default="q3_gan.pt")
 parser.add_argument("--load_path", type=str, default="q3_gan.pt")
-parser.add_argument("--batch_size", type=int, default=128, help="Size of the mini-batches")
+parser.add_argument("--batch_size", type=int, default=64, help="Size of the mini-batches")
 parser.add_argument("--dimz", type=int, default=100, help="Dimension of the latent variables")
 parser.add_argument("--data_dir", type=str, default="svhn.mat", help="SVHN dataset location")
 parser.add_argument("--nb_epochs", type=int, default=25, help = "The number of epochs for training")
@@ -58,7 +58,7 @@ class D(nn.Module):
             nn.LeakyReLU(0.2),
 
             # layer 4
-            nn.Conv2d(256, 1, 5, padding=2, stride=2),
+            nn.Conv2d(256, 1, 5, padding=2, stride=1),
             View(-1, 4*4*1),
             nn.Sigmoid(),
         )
