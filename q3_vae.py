@@ -50,43 +50,43 @@ class VAE(nn.Module):
 
         self.enc = nn.Sequential(
             # Layer 1
-            nn.Conv2d(3, 64, kernel_size=5, stride=2, padding=2),
+            nn.Conv2d(3, 128, kernel_size=5, stride=2, padding=2),
             nn.LeakyReLU(2e-1),
 
             #  Layer 2
-            nn.Conv2d(64, 128, kernel_size=5, stride=2, padding=2),
-            nn.BatchNorm2d(128),
-            nn.LeakyReLU(2e-1),
-
-            # Layer 3
             nn.Conv2d(128, 256, kernel_size=5, stride=2, padding=2),
             nn.BatchNorm2d(256),
             nn.LeakyReLU(2e-1),
 
+            # Layer 3
+            nn.Conv2d(256, 512, kernel_size=5, stride=2, padding=2),
+            nn.BatchNorm2d(512),
+            nn.LeakyReLU(2e-1),
+
             # Layer 4
-            View(-1, 4*4*256),
-            nn.Linear(4*4*256, 2 * self.dimz)
+            View(-1, 4*4*512),
+            nn.Linear(4*4*512, 2 * self.dimz)
         )
 
         self.dec = nn.Sequential(
             # Layer 1
-            nn.Linear(self.dimz, 4*4*512),
-            nn.BatchNorm1d(4*4*512),
+            nn.Linear(self.dimz, 4*4*1024),
+            nn.BatchNorm1d(4*4*1024),
             nn.ReLU(),
-            View(-1, 512, 4, 4),
+            View(-1, 1024, 4, 4),
 
             # Layer 2
+            nn.ConvTranspose2d(1024, 512, kernel_size=5, stride=2, padding=2, output_padding=1),
+            nn.BatchNorm2d(512),
+            nn.ReLU(),
+
+            # Layer 3
             nn.ConvTranspose2d(512, 256, kernel_size=5, stride=2, padding=2, output_padding=1),
             nn.BatchNorm2d(256),
             nn.ReLU(),
 
-            # Layer 3
-            nn.ConvTranspose2d(256, 128, kernel_size=5, stride=2, padding=2, output_padding=1),
-            nn.BatchNorm2d(128),
-            nn.ReLU(),
-
             # Layer 4
-            nn.ConvTranspose2d(128, 3, kernel_size=4, stride=2, padding=1)
+            nn.ConvTranspose2d(256, 3, kernel_size=4, stride=2, padding=1)
         )
 
     def forward(self, x):
