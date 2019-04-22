@@ -50,22 +50,22 @@ class VAE(nn.Module):
 
         self.enc = nn.Sequential(
             # Layer 1
-            nn.Conv2d(3, 64, kernel_size=5, stride=2),
+            nn.Conv2d(3, 64, kernel_size=5, stride=2, padding=2),
             nn.LeakyReLU(2e-1),
 
             #  Layer 2
-            nn.Conv2d(64, 128, kernel_size=5, stride=2),
+            nn.Conv2d(64, 128, kernel_size=5, stride=2, padding=2),
             nn.BatchNorm2d(128),
             nn.LeakyReLU(2e-1),
 
             # Layer 3
-            nn.Conv2d(128, 256, kernel_size=5, stride=2),
+            nn.Conv2d(128, 256, kernel_size=5, stride=2, padding=2),
             nn.BatchNorm2d(256),
             nn.LeakyReLU(2e-1),
 
             # Layer 4
-            nn.Conv2d(256, 1, kernel_size=5, stride=2),
-            View(-1, 4*4*1)
+            View(-1, 4*4*256),
+            nn.Linear(4*4*256, 2 * self.dimz)
         )
 
         self.dec = nn.Sequential(
