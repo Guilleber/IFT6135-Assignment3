@@ -49,7 +49,7 @@ class D(nn.Module):
 
             # layer2
             nn.Conv2d(64, 128, 5, padding=2, stride=2),
-            nn.BatchNorm2d(256),
+            nn.BatchNorm2d(128),
             nn.LeakyReLU(0.2),
 
             # layer3
@@ -137,6 +137,7 @@ def train_model(g, d, train, valid, save_path):
 
             # obtain the discriminator output on real data
             real_prob = d(batch)
+            print(real_prob.size())
 
             # obtain the discriminator output on the fake data
             z = torch.randn(batch.size()[0], g.dimz, device=args.device)
