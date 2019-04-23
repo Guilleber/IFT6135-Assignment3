@@ -111,8 +111,14 @@ def calculate_fid_score(sample_feature_iterator,
 
     sigma_p = sm_p - torch.matmul(mu_p.view(3072, 1), mu_p.view(1, 3072))
 
+    # Get the square root of the matrix sigma_p sigma_q
+    sqrt = torch.matmul(sigma_p, sigma_q)
+    u, s, v_t = torch.svd(sqrt)
+    sqrt = torch.matmul(u, torch.sqrt(torch.diag(s)))
+    sqrt = torch.matmul(sqrt, v_t)
+
     # compute the FID score
-    fid = torch.norm(mu_q - mu_p) ** 2. + torch.trace(sigma_q + sigma_p -2 * torch.matmul(sigma_p, sigma_q) ** 2.)
+    fid = torch.norm(mu_q - mu_p) ** 2. + torch.trace(sigma_q + sigma_p -2 * sqrt)
 
     return fid.item()
 
