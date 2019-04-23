@@ -22,21 +22,21 @@ class D(nn.Module):
 
         self.convs = nn.Sequential(
             # layer1
-            nn.Conv2d(3, 128, 5, padding=2, stride=2),
+            nn.Conv2d(3, 64, 5, padding=2, stride=2),
             nn.LeakyReLU(0.2),
 
             # layer2
+            nn.Conv2d(64, 128, 5, padding=2, stride=2),
+            nn.BatchNorm2d(128),
+            nn.LeakyReLU(0.2),
+
+            # layer3
             nn.Conv2d(128, 256, 5, padding=2, stride=2),
             nn.BatchNorm2d(256),
             nn.LeakyReLU(0.2),
 
-            # layer3
-            nn.Conv2d(256, 512, 5, padding=2, stride=2),
-            nn.BatchNorm2d(512),
-            nn.LeakyReLU(0.2),
-
             # layer 4
-            nn.Conv2d(512, 1, 5, padding=2, stride=1),
+            nn.Conv2d(256, 1, 5, padding=2, stride=1),
             View(-1, 4*4*1),
             nn.Sigmoid(),
         )
@@ -55,23 +55,23 @@ class G(nn.Module):
 
         self.deconvs = nn.Sequential(
             # layer 1
-            nn.Linear(self.dimz, 4 * 4 * 1024),
-            nn.BatchNorm1d(4*4*1024),
+            nn.Linear(self.dimz, 4 * 4 * 512),
+            nn.BatchNorm1d(4*4*512),
             nn.ReLU(),
-            View(-1, 1024, 4, 4),
+            View(-1, 512, 4, 4),
 
             # layer2
-            nn.ConvTranspose2d(1024, 512, 5, padding=2, stride=2, output_padding=1),
-            nn.BatchNorm2d(512),
-            nn.ReLU(),
-
-            # layer 3
             nn.ConvTranspose2d(512, 256, 5, padding=2, stride=2, output_padding=1),
             nn.BatchNorm2d(256),
             nn.ReLU(),
 
+            # layer 3
+            nn.ConvTranspose2d(256, 128, 5, padding=2, stride=2, output_padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(),
+
             # layer 4
-            nn.ConvTranspose2d(256, 3, 5, padding=2, stride=2, output_padding=1),
+            nn.ConvTranspose2d(128, 3, 5, padding=2, stride=2, output_padding=1),
             nn.Tanh()
         )
 
