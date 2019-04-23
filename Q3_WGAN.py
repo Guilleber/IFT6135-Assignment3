@@ -79,6 +79,9 @@ class G(nn.Module):
         out = self.deconvs(z)
         return out
 
+    def extract_features(self, z):
+        return z.view(-1, 3*32*32)
+
 
 def wgan_gp_loss(real, fake, grad, lam):
     """
@@ -235,9 +238,9 @@ def evaluation(model):
         # sample 1000 images to use for FID score
         thousand_dir =  os.path.join(args.sample_dir, "1000_samples", "samples")
         if not os.path.isdir(thousand_dir):
-            os.mkdir(thousand_dir)
+            os.makedirs(thousand_dir)
 
-        z = torch.randn(1000, model.dimz)
+        z = torch.randn(1000, model.dimz, device=args.device)
         gz = model.deconvs(z)
         for i, sample in enumerate(gz):
             im = transf(sample.to(device='cpu'))

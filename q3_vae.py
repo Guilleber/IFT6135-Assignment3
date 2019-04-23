@@ -93,14 +93,13 @@ class VAE(nn.Module):
 
         return mu, log_sigma, g_z
 
-    def generate(self, z):
+    def extract_features(self, z):
         """
-        Generate multiple samples
-        :param z: Size is [batch_size, n_samples, dimz]
+        Extract features
+        :param z: Size is [batch_size, dimz]
         :return:
         """
-        # To do
-        pass
+        return z.view(-1, 3*32*32)
 
 
 def kl_div(mu, log_sigma):
@@ -232,10 +231,10 @@ def evaluation(model):
             # sample 1000 images to use for FID score
             thousand_dir = os.path.join(args.sample_dir, "1000_samples", "samples")
             if not os.path.isdir(thousand_dir):
-                os.mkdir(thousand_dir)
+                os.makedirs(thousand_dir)
 
-            z = torch.randn(1000, model.dimz)
-            gz = model.deconvs(z)
+            z = torch.randn(1000, model.dimz, device=args.device)
+            gz = model.dec(z)
             for i, sample in enumerate(gz):
                 im = transf(sample.to(device='cpu'))
                 im.save(os.path.join(thousand_dir, "img_{}.jpeg".format(i)))
