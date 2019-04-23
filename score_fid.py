@@ -5,6 +5,8 @@ import torchvision.transforms as transforms
 import torch
 import classify_svhn
 from classify_svhn import Classifier
+from Q3_WGAN import G
+from q3_vae import VAE
 
 SVHN_PATH = "svhn"
 PROCESS_BATCH_SIZE = 32
@@ -134,7 +136,15 @@ if __name__ == "__main__":
     if quit:
         exit()
     print("Test")
-    classifier = torch.load(args.model, map_location='cpu')
+    if args.model == "svhn_classifier.pt":
+        classifier = torch.load(args.model, map_location='cpu')
+    else:
+        if args.model == "q3_vae.pt":
+            classifier = VAE(32, 100)
+            classifier.load_state_dict(torch.load(args.model, map_location='cpu'))
+        else:
+            classifier = G(32, 100)
+            classifier.load_state_dict(torch.load(args.model, map_location='cpu'))
     classifier.eval()
 
     sample_loader = get_sample_loader(args.directory,

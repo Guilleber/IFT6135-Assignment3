@@ -93,7 +93,7 @@ def kl_div(mu, log_sigma):
     """
     Function that computes the KL divergence
     :param mu: Mean parameter of size [batch_size, dimz]
-    :param log_sigma: Covariance parameter (diagonal of matrix) of size [batch_size, dimz]
+    :param log_sigma: Log of the sigma value for each dimension of size [batch_size, dimz]
     :return: The KL divergence for each element in the batch. Size is [batch_size,]
     """
     return 0.5 * (-1. - 2.*log_sigma + torch.exp(log_sigma)**2. + mu**2.).sum(dim=1)
@@ -158,14 +158,14 @@ def pdf(x, mu, log_sigma):
     Function that computes the log_pdf of x
     :param x: Input of size [batch_size, n_samples, dimz]
     :param mu: Mean of size [batch_size, dimz]
-    :param log_sigma: Covariance of size [batch_size, dimz]
+    :param log_sigma: Log  of sigma vector (elementwise) of size [batch_size, dimz]
     :return: The log_pdf for each input of size [batch_size, n_samples]
     """
     sigma = torch.exp(log_sigma) + 1e-7
     k = mu.size()[1]
     mu = mu.view([-1, 1, k])
     sigma = sigma.view([-1, 1, k])
-    log_det = torch.log(sigma).sum(dim=-1)
+    log_det = log_sigma.sum(dim=-1).view(-1, 1)
     log_exp = -0.5 * ((1./sigma**2.) * (x - mu)**2.).sum(dim=-1)
     return -(k/2.)*np.log(2 * np.pi) - log_det + log_exp
 
@@ -194,10 +194,10 @@ def evaluate(model, x, z):
     :param model:
     :param x: Input of size [batch_size, dimz]
     :param z: Samples from N(0,I) of size [batch_size, num_samples, dimz
-    :return:
+    :return: The log-likelihood estimate for the dataset
     """
-    ll = torch.zeros([model.batch_size,])
-    nb_batches = int(np.ceil(x.size()[0] / model.batch_size))
+    ll = torch.zeros([model.batch_size,], device=args.device)
+    nb_batches = int(np.floor(x.size()[0] / model.batch_size))
 
     for i in range(nb_batches):
         batch = x[i*model.batch_size:(i+1)*model.batch_size]
@@ -218,8 +218,8 @@ if __name__ == "__main__":
     test = test.view([-1, 1, 28, 28])
 
     # Create model. Load or train depending on choice
-    model = VAE(batch_size=1, dimz=100)
-    if parser.parse_args().t:
+    model = VAE(batch_size=32, dimz=100).to(args.device)
+    if args.t:
         train_model(model, train, valid, args.save_path)
     else:
         model.load_state_dict(torch.load(args.load_path))

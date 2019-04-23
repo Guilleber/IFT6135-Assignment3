@@ -80,7 +80,7 @@ class Classifier(nn.Module):
             nn.Dropout2d(p=0.1),
             nn.MaxPool2d(2),
 
-            nn.Conv2d(128, 512, 2),
+            nn.Conv2d(128, 512, 2),  # ################ Verify that this is not supposed to be 4 instead for kernel
         )
 
         self.mlp = nn.Sequential(
@@ -96,6 +96,7 @@ class Classifier(nn.Module):
         return self.mlp(self.extract_features(x))
 
     def extract_features(self, x):
+        print(self.conv_stack(x).size()) # This line checks whether or not the shape is fine. It seems it is not
         return self.conv_stack(x)[:, :, 0, 0]
 
 
