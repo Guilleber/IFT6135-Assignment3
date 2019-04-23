@@ -11,23 +11,6 @@ import argparse
 import os
 
 
-parser = argparse.ArgumentParser()
-parser.add_argument("-t", action="store_true", help="Flag to specify if we train the model")
-parser.add_argument("--save_path", type=str, default="q3_vae.pt")
-parser.add_argument("--load_path", type=str, default="q3_vae.pt")
-parser.add_argument("--batch_size", type=int, default=64, help="Size of the mini-batches")
-parser.add_argument("--dimz", type=int, default=100, help="Dimension of the latent variables")
-parser.add_argument("--data_dir", type=str, default="svhn.mat", help="SVHN dataset location")
-parser.add_argument("--nb_epochs", type=int, default=50, help = "The number of epochs for training")
-parser.add_argument("--eps", type=float, default=1e-1, help="Perturbation value to the latent when evaluating")
-parser.add_argument("--sample_dir", type=str, default="samples", help="Directory containing samples for"
-                                                                      "evaluation")
-
-# get the arguments
-args = parser.parse_args()
-args.device = torch.device("cuda") if cuda.is_available() else torch.device('cpu')
-
-
 class View(nn.Module):
 
     def __init__(self, shape, *shape_):
@@ -246,8 +229,34 @@ def evaluation(model):
             im = transf(x_a.to(device='cpu'))
             im.save(os.path.join(int_dir, "i2_img_{}.jpeg".format(a)))
 
+            # sample 1000 images to use for FID score
+            thousand_dir = os.path.join(args.sample_dir, "1000_samples", "samples")
+            if not os.path.isdir(thousand_dir):
+                os.mkdir(thousand_dir)
+
+            z = torch.randn(1000, model.dimz)
+            gz = model.deconvs(z)
+            for i, sample in enumerate(gz):
+                im = transf(sample.to(device='cpu'))
+                im.save(os.path.join(thousand_dir, "img_{}.jpeg".format(i)))
+
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-t", action="store_true", help="Flag to specify if we train the model")
+    parser.add_argument("--save_path", type=str, default="q3_vae.pt")
+    parser.add_argument("--load_path", type=str, default="q3_vae.pt")
+    parser.add_argument("--batch_size", type=int, default=64, help="Size of the mini-batches")
+    parser.add_argument("--dimz", type=int, default=100, help="Dimension of the latent variables")
+    parser.add_argument("--data_dir", type=str, default="svhn.mat", help="SVHN dataset location")
+    parser.add_argument("--nb_epochs", type=int, default=50, help="The number of epochs for training")
+    parser.add_argument("--eps", type=float, default=1e-1, help="Perturbation value to the latent when evaluating")
+    parser.add_argument("--sample_dir", type=str, default="samples", help="Directory containing samples for"
+                                                                          "evaluation")
+
+    # get the arguments
+    args = parser.parse_args()
+    args.device = torch.device("cuda") if cuda.is_available() else torch.device('cpu')
     # check for cuda
     device = torch.device("cuda") if cuda.is_available() else torch.device('cpu')
     args.device = device
